@@ -2992,7 +2992,7 @@ function showRememberedAccount(user){
   o.innerHTML=`<div class="box"><h2>أهلًا بعودتك إلى مِسار</h2><p style="text-align:center;color:var(--ink-soft);margin:0 0 16px">حسابك محفوظ على هذا الجهاز</p><button class="btn btn-brand" style="width:100%" id="rememberedAccountBtn"></button><button class="btn" style="width:100%;margin-top:8px" id="otherAccountBtn">استخدام حساب آخر</button></div>`;
   document.body.appendChild(o);
   const b=document.getElementById('rememberedAccountBtn'); b.textContent=user.fullName||user.username; b.onclick=async()=>{ o.remove(); await reloadState(); if(ME) startPolling(); };
-  document.getElementById('otherAccountBtn').onclick=()=>showLogin(false);
+  document.getElementById('otherAccountBtn').onclick=()=>{showLogin();const b=document.getElementById('savedAccountBtn')||document.getElementById('existingAccountBtn');if(b)b.click();};
 }
 async function boot(){
   try{ MASAR_HEALTH=await fetch(MASAR_API+'/health').then(r=>{if(!r.ok)throw new Error('health');return r.json();}); }catch(e){ netBanner(true); showLogin(); return; }
