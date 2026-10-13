@@ -50,6 +50,12 @@ jobs:
             throw "PyInstaller did not produce MasarServer.exe"
           }
 
+      - name: Smoke-test packaged backend persistence across restart
+        shell: pwsh
+        run: |
+          $env:MASAR_SMOKE_BACKEND_EXE = (Resolve-Path "desktop/resources/backend/MasarServer/MasarServer.exe").Path
+          python tests/desktop_persistence_smoke.py
+
       - name: Install desktop build dependencies
         working-directory: desktop
         shell: pwsh
