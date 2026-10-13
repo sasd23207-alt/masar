@@ -3026,7 +3026,10 @@ async function openAdminPanel(){
   o.innerHTML=`<div class="box"><div style="display:flex;justify-content:space-between"><h3>إدارة النظام</h3><button class="btn" onclick="document.getElementById('adminOverlay').style.display='none'">إغلاق</button></div>
   <h4>المستخدمون</h4><table class="data-table"><tbody>${users.map(u=>`<tr><td>${u.username}</td><td>${ROLE_AR[u.role]}</td><td>${u.active?'فعّال':'موقوف'}</td><td>${u.username!==ME.username&&u.active?`<button class="btn btn-sm" onclick="adminDelUser(${u.id})">إيقاف</button>`:''}</td></tr>`).join('')}</tbody></table>
   <div style="margin-top:8px"><input id="nuU" placeholder="اسم المستخدم"><input id="nuP" type="password" placeholder="كلمة المرور (8+)"><select id="nuR"><option value="teacher">معلم</option><option value="accountant">محاسب</option><option value="management">إدارة</option><option value="read_only">عرض فقط</option><option value="admin">مدير</option></select><button class="btn btn-brand" onclick="adminAddUser()">إضافة</button></div>
-  <h4 style="margin-top:18px">النسخ الاحتياطي</h4><button class="btn btn-brand" onclick="adminBackup()">إنشاء نسخة الآن</button>
+  <h4 style="margin-top:18px">النسخ الاحتياطي</h4>
+  <button class="btn btn-brand" onclick="adminBackup()">إنشاء نسخة على الخادم</button>
+  <button class="btn" onclick="adminDownloadBackup()">تنزيل نسخة خارج الخادم</button>
+  <p style="font-size:12px;color:var(--ink-soft)">مهم: تنزيل النسخة يحفظ ملفًا على جهازك؛ انقله إلى مكان آمن مستقل عن Render.</p>
   <div style="margin-top:6px">${files.slice(-8).reverse().map(f=>`<div>${f} <button class="btn btn-sm" onclick="adminRestore('${f}')">استعادة</button></div>`).join('')||'لا توجد نسخ'}</div>
   <h4 style="margin-top:18px">الإشعارات (واتساب): ${wa?'<span style="color:#2F6B45">الربط مفعّل</span>':'<span style="color:#C4453D">غير مضبوط — الرسائل تبقى في الانتظار ولا ترسل (راجع .env)</span>'}</h4>
   <table class="data-table"><thead><tr><th>الحدث</th><th>الرقم</th><th>الحالة</th><th>ملاحظة</th></tr></thead><tbody>${ob.map(n=>`<tr><td>${n.event}</td><td dir="ltr">${n.phone}</td><td>${n.status}</td><td>${n.cancel_reason||n.last_error||''}</td></tr>`).join('')||'<tr><td colspan="4">لا توجد إشعارات</td></tr>'}</tbody></table>
@@ -3037,6 +3040,16 @@ async function openAdminPanel(){
 async function adminAddUser(){ try{ await api('POST','/users',{username:nuU.value,password:nuP.value,role:nuR.value}); toast('تمت إضافة المستخدم'); openAdminPanel(); }catch(e){ toast('✗ '+errMsg(e)); } }
 async function adminDelUser(id){ if(!confirm('إيقاف هذا المستخدم؟')) return; try{ await api('DELETE','/users/'+id); openAdminPanel(); }catch(e){ toast('✗ '+errMsg(e)); } }
 async function adminBackup(){ try{ const d=await api('POST','/backup',{}); toast('تم إنشاء النسخة: '+d.file); openAdminPanel(); }catch(e){ toast('✗ '+errMsg(e)); } }
+async function adminDownloadBackup(){
+  try{
+    const r=await fetch(MASAR_API+'/backup/export',{headers:TOKEN?{Authorization:'Bearer '+TOKEN}:{}});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.error||('HTTP '+r.status)); }
+    const blob=await r.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download='masar_backup_'+todayKey()+'.db'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast('بدأ تنزيل النسخة. احفظها خارج Render وفي مكان آمن.');
+  }catch(e){ toast('✗ '+errMsg(e)); }
+}
 async function adminRestore(f){ if(!confirm('استعادة '+f+'؟ ستُستبدل البيانات الحالية (تُحفظ نسخة قبل الاستعادة).')) return; try{ await api('POST','/restore',{file:f}); toast('تمت الاستعادة'); await reloadState(); openAdminPanel(); }catch(e){ toast('✗ '+errMsg(e)); } }
 boot();
 
