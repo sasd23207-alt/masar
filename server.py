@@ -30,7 +30,7 @@ WA_MODE = lambda: os.environ.get('WHATSAPP_MODE', 'template')  # template | text
 COUNTRY_CODE = lambda: os.environ.get('MASAR_COUNTRY_CODE', '218').lstrip('+')
 WORKER_INTERVAL = lambda: float(os.environ.get('MASAR_WORKER_INTERVAL', '30'))
 OVERDUE_REMINDER_DAYS = lambda: int(os.environ.get('MASAR_OVERDUE_REMINDER_DAYS', '7'))
-SESSION_HOURS = 12
+SESSION_HOURS = 8760  # remember this device for one year
 DEFAULT_CLASSES = ['الأول أ','الثاني أ','الثالث أ','الرابع أ','الخامس أ','السادس أ','السابع أ','الثامن أ','التاسع أ','العاشر أ','الحادي عشر أ','الثاني عشر أ']
 
 wlock = threading.RLock()   # يسلسل الكتابات (مع WAL لا تعطل القراءة)
