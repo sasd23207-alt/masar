@@ -2951,10 +2951,12 @@ function showLogin(){
     <p style="text-align:center">نظام إدارة مدرسة الريادة</p>
     ${MASAR_HEALTH.managerExists
       ? (saved ? `<button class="btn btn-brand" style="width:100%;margin:8px 0" id="savedAccountBtn"></button>` : `<button class="btn btn-brand" style="width:100%;margin:8px 0" id="existingAccountBtn">الدخول إلى حساب موجود</button>`)
-      : `<input id="newAccountName" placeholder="اكتب اسم الحساب" autocomplete="username" maxlength="60">
+      : `<input id="newAccountName" placeholder="اسم المستخدم" autocomplete="username" maxlength="60">
+         <input id="newAccountPassword" type="password" placeholder="كلمة المرور (8 أحرف على الأقل)" autocomplete="new-password" minlength="8">
+         <input id="newAccountCode" type="password" placeholder="رمز تفعيل المدرسة" autocomplete="off">
          <div class="err" id="loginErr"></div>
-         <button class="btn btn-brand" style="width:100%;margin-top:6px" id="createAccountBtn">إنشاء حسابي</button>`}
-    ${MASAR_HEALTH.managerExists ? '<button class="btn" style="width:100%;margin-top:8px" id="recoverAccountBtn">استعادة الدخول</button>' : ''}
+         <button class="btn btn-brand" style="width:100%;margin-top:6px" id="createAccountBtn">إنشاء حساب المدير</button>`}
+    ${MASAR_HEALTH.managerExists ? '<button class="btn" style="width:100%;margin-top:8px" id="recoverAccountBtn">تسجيل الدخول باسم المستخدم وكلمة المرور</button>' : ''}
   </div>`;
   document.body.appendChild(o);
   const recovery=document.getElementById('recoverAccountBtn');
@@ -2969,17 +2971,22 @@ function showLogin(){
   const create=document.getElementById('createAccountBtn');
   if(create) create.onclick=async()=>{
     const u=document.getElementById('newAccountName').value.trim();
+    const password=document.getElementById('newAccountPassword').value;
+    const accessCode=document.getElementById('newAccountCode').value;
     const err=document.getElementById('loginErr');
-    if(!u){err.textContent='اكتب اسم الحساب أولًا';return;}
+    if(!u){err.textContent='اكتب اسم المستخدم أولًا';return;}
+    if(password.length<8){err.textContent='كلمة المرور يجب أن تكون 8 أحرف على الأقل';return;}
+    if(!accessCode){err.textContent='أدخل رمز تفعيل المدرسة';return;}
     create.disabled=true;create.textContent='جارٍ إنشاء الحساب…';
     try{
-      const d=await api('POST','/register',{username:u,fullName:u});
+      await api('POST','/register',{username:u,password,fullName:u,accessCode});
+      const d=await api('POST','/login',{username:u,password});
       TOKEN=d.token;ME=d.user;
       try{localStorage.setItem('masar_token',TOKEN);localStorage.setItem('masar_username',d.user.username||u);}catch(e){}
       o.remove();await reloadState();startPolling();
     }catch(e){
       if(e&&e.message==='ACCOUNT_EXISTS'){MASAR_HEALTH.managerExists=true;showLogin();return;}
-      err.textContent=errMsg(e);create.disabled=false;create.textContent='إنشاء حسابي';
+      err.textContent=errMsg(e);create.disabled=false;create.textContent='إنشاء حساب المدير';
     }
   };
 }
