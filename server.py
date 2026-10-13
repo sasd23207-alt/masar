@@ -371,7 +371,7 @@ def class_from(c, body):
 
 def op_class_add(c, u, b):
     raw = b.get('name', '')
-    name = re.sub(r'\\s+', ' ', str(raw).strip())
+    name = re.sub(r'\s+', ' ', str(raw).strip())
     if not name: raise ApiError(400, 'MISSING:name')
     if len(name) > 80: raise ApiError(400, 'INVALID:name')
     existing = c.execute('SELECT id FROM classes WHERE name=?', (name,)).fetchone()
