@@ -11,12 +11,11 @@ DefaultGroupName=مِسار
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\Masar.exe
 OutputDir=release
-OutputBaseFilename=Masar-Setup-Windows-x64
+OutputBaseFilename=Masar-Setup-Windows7-32bit
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=admin
-ArchitecturesInstallIn64BitMode=x64
 MinVersion=6.1sp1
 
 [Dirs]
