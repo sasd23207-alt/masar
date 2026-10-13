@@ -81,6 +81,10 @@ try:
         token = page.evaluate("localStorage.getItem('masar_token')")
         check('U03 correct code creates the manager and signs in',
               bool(token) and api('GET', 'me', token=token)[0] == 200)
+        c = sqlite3.connect(DB)
+        remaining = c.execute('SELECT MAX(expires_at) FROM sessions').fetchone()[0] - time.time()
+        c.close()
+        check('U03b remembered session is issued for approximately two years', remaining > 700 * 24 * 3600)
 
         status, state = api('GET', 'state', token=token)
         check('U04 authenticated school state is loaded from server',
