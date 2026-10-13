@@ -2116,7 +2116,7 @@ document.getElementById('langBtn').addEventListener('click', toggleLang);
 async function addClassUI(){
   const raw = prompt('اكتب اسم الفصل الجديد:');
   if(raw === null) return;
-  const name = raw.trim().replace(/\\s+/g, ' ');
+  const name = raw.trim().replace(/\s+/g, ' ');
   if(!name){ toast('يرجى كتابة اسم الفصل'); return; }
   if(name.length > 80){ toast('اسم الفصل طويل جدًا (الحد 80 حرفًا)'); return; }
   const result = await apiWrite('POST','/classes',{name});
