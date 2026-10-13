@@ -31,7 +31,7 @@ COUNTRY_CODE = lambda: os.environ.get('MASAR_COUNTRY_CODE', '218').lstrip('+')
 WORKER_INTERVAL = lambda: float(os.environ.get('MASAR_WORKER_INTERVAL', '30'))
 OVERDUE_REMINDER_DAYS = lambda: int(os.environ.get('MASAR_OVERDUE_REMINDER_DAYS', '7'))
 SESSION_HOURS = 12
-DEFAULT_CLASSES = ['السادس أ','السابع أ','الثامن أ','التاسع أ','العاشر أ','الحادي عشر أ','الثاني عشر أ']
+DEFAULT_CLASSES = ['الأول أ','الثاني أ','الثالث أ','الرابع أ','الخامس أ','السادس أ','السابع أ','الثامن أ','التاسع أ','العاشر أ','الحادي عشر أ','الثاني عشر أ']
 
 wlock = threading.RLock()   # يسلسل الكتابات (مع WAL لا تعطل القراءة)
 
@@ -369,6 +369,17 @@ def class_from(c, body):
     if not cn and body.get('grade'): cn = f"{body['grade']} {body.get('section') or 'أ'}"
     return ensure_class(c, cn) if cn else None
 
+def op_class_add(c, u, b):
+    raw = b.get('name', '')
+    name = re.sub(r'\s+', ' ', str(raw).strip())
+    if not name: raise ApiError(400, 'MISSING:name')
+    if len(name) > 80: raise ApiError(400, 'INVALID:name')
+    existing = c.execute('SELECT id FROM classes WHERE name=?', (name,)).fetchone()
+    if existing: return {'id': existing['id'], 'name': name, 'created': False}
+    cid = ensure_class(c, name)
+    audit(c, u['username'], 'class_add', {'id': cid, 'name': name})
+    return {'id': cid, 'name': name, 'created': True}
+
 def op_student_add(c, u, b):
     need(b, 'name'); name = re.sub(r'\s+', ' ', str(b['name']).strip())
     if not name: raise ApiError(400, 'MISSING:name')
@@ -605,6 +616,7 @@ def route_perm(method, parts):
     """(permission) المطلوبة لكل مسار — تُفرض على الخادم وليس الواجهة فقط."""
     a = parts[1] if len(parts) > 1 else ''
     w = method != 'GET'
+    if a == 'classes': return 'students' if w else 'students_read'
     if a == 'students': return 'students' if w else 'students_read'
     if a == 'teachers': return 'teachers' if w else 'students_read'
     if a == 'attendance': return 'attendance' if w else 'students_read'
@@ -716,6 +728,7 @@ class Handler(BaseHTTPRequestHandler):
         a = p[1]; rid = int(p[2]) if len(p) > 2 and p[2].isdigit() else None; sub = p[3] if len(p) > 3 else ''
         role = u['role']
         if a == 'state' and m == 'GET': return {'state': build_state(c, role)}
+        if a == 'classes' and m == 'POST': return self.tx(c, op_class_add, u, b)
         if a == 'students':
             if m == 'POST': return self.tx(c, op_student_add, u, b)
             if m == 'PUT' and rid: return self.tx(c, op_student_update, u, rid, b)
