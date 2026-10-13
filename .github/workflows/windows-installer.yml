@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build-windows-x64:
-    name: Build Windows 7-compatible x64 installer
+    name: Build Windows 7-compatible 32-bit installer
     runs-on: windows-2022
     timeout-minutes: 30
     steps:
@@ -27,12 +27,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.8.10"
-          architecture: "x64"
+          architecture: "x86"
 
       - name: Set up Node.js for the desktop shell
         uses: actions/setup-node@v4
         with:
           node-version: "16.20.2"
+          architecture: "x86"
 
       - name: Check Python syntax and build backend executable
         shell: pwsh
@@ -55,7 +56,7 @@ jobs:
         working-directory: desktop
         shell: pwsh
         run: |
-          npm run build:dir -- --publish never
+          npm run build:dir -- --ia32 --publish never
           if (!(Test-Path "release/win-unpacked/Masar.exe")) {
             throw "Electron packaging did not produce release/win-unpacked/Masar.exe"
           }
@@ -82,14 +83,14 @@ jobs:
         shell: pwsh
         run: |
           & "${{ steps.inno.outputs.iscc }}" "desktop/installer.iss"
-          if (!(Test-Path "desktop/release/Masar-Setup-Windows-x64.exe")) {
+          if (!(Test-Path "desktop/release/Masar-Setup-Windows7-32bit.exe")) {
             throw "Inno Setup did not produce the expected installer."
           }
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Masar-Setup-Windows-x64
+          name: Masar-Setup-Windows7-32bit
           path: desktop/release/Masar-Setup-Windows-x64.exe
           if-no-files-found: error
           retention-days: 30
