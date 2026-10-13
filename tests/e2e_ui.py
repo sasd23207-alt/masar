@@ -2,6 +2,7 @@
 """Focused browser test for the current manager login flow and session persistence."""
 import os, sys, json, time, subprocess, tempfile, urllib.request, urllib.error, sqlite3
 from pathlib import Path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import server
 from playwright.sync_api import sync_playwright
 
