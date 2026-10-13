@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "check": "node --check main.js",
-    "build:dir": "electron-builder --win dir --x64"
+    "build:dir": "electron-builder --win dir --ia32"
   },
   "devDependencies": {
     "electron": "22.3.27",
@@ -36,7 +36,7 @@
       "target": [
         "dir"
       ],
-      "artifactName": "Masar-${version}-${arch}.${ext}"
+      "artifactName": "Masar-${version}-ia32.${ext}"
     }
   }
 }
