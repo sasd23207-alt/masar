@@ -2949,7 +2949,7 @@ function showRememberedAccount(user){
 }
 async function boot(){
   try{ await fetch(MASAR_API+'/health').then(r=>{if(!r.ok)throw new Error('health');return r.json();}); }catch(e){ netBanner(true); showLogin(); return; }
-  if(TOKEN){ try{ const d=await api('GET','/me'); ME=d.user; showRememberedAccount(d.user); return; }catch(e){} }
+  if(TOKEN){ try{ const d=await api('GET','/me'); ME=d.user; try{localStorage.setItem('masar_username',d.user.username||'');}catch(e){} showRememberedAccount(d.user); return; }catch(e){} }
   showLogin();
 }
 
