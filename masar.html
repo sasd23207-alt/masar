@@ -2978,7 +2978,7 @@ function showLogin(){
       try{localStorage.setItem('masar_token',TOKEN);localStorage.setItem('masar_username',d.user.username||u);}catch(e){}
       o.remove();await reloadState();startPolling();
     }catch(e){
-      if(lastApiError==='ACCOUNT_EXISTS'){MASAR_HEALTH.managerExists=true;showLogin();return;}
+      if(e&&e.message==='ACCOUNT_EXISTS'){MASAR_HEALTH.managerExists=true;showLogin();return;}
       err.textContent=errMsg(e);create.disabled=false;create.textContent='إنشاء حسابي';
     }
   };
