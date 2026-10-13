@@ -39,7 +39,7 @@ jobs:
         run: |
           python -m py_compile server.py
           python -m pip install "pip<25" pyinstaller==5.13.2
-          python -m PyInstaller --noconfirm --clean --onedir --name MasarServer --distpath "desktop/resources/backend" --workpath "desktop/build/pyinstaller" --specpath "desktop/build" --add-data "masar.html;." server.py
+          python -m PyInstaller --noconfirm --clean --onedir --name MasarServer --distpath "desktop/resources/backend" --workpath "desktop/build/pyinstaller" --specpath "desktop/build" --add-data "$((Resolve-Path 'masar.html').Path);." server.py
           if (!(Test-Path "desktop/resources/backend/MasarServer/MasarServer.exe")) {
             throw "PyInstaller did not produce MasarServer.exe"
           }
