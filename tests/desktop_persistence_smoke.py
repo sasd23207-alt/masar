@@ -48,8 +48,10 @@ def free_port():
 
 
 def start_server(env, log_handle):
+    backend_exe = env.get("MASAR_SMOKE_BACKEND_EXE")
+    command = [backend_exe] if backend_exe else [sys.executable, str(SERVER)]
     proc = subprocess.Popen(
-        [sys.executable, str(SERVER)],
+        command,
         cwd=str(ROOT),
         env=env,
         stdout=log_handle,
@@ -105,7 +107,7 @@ def run():
             "PYTHONIOENCODING": "utf-8",
         })
         env.pop("MASAR_ACCESS_CODE", None)
-        with (root / "backend.log").open("w", encoding="utf-8") as log:
+        with (root / "backend.log").open("w+", encoding="utf-8") as log:
             proc = None
             try:
                 proc, base, health = start_server(env, log)
