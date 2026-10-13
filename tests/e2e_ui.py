@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Focused browser test for the current manager login flow and session persistence."""
 import os, sys, json, time, subprocess, tempfile, urllib.request, urllib.error, sqlite3
+from pathlib import Path
+import server
 from playwright.sync_api import sync_playwright
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -128,6 +130,39 @@ finally:
         stop()
     except Exception:
         pass
+
+# Exercise the migration helper against isolated temporary databases.
+migration_tmp = Path(tempfile.mkdtemp())
+legacy = migration_tmp / 'legacy.db'
+target = migration_tmp / 'persistent' / 'masar.db'
+db = sqlite3.connect(legacy)
+db.execute("CREATE TABLE keep_me (value TEXT NOT NULL)")
+db.execute("INSERT INTO keep_me VALUES ('school-record-123')")
+db.commit()
+db.close()
+server.LEGACY_DB_PATH = legacy
+server.DB_PATH = target
+copied = server.migrate_legacy_database()
+db = sqlite3.connect(target)
+integrity = db.execute("PRAGMA integrity_check").fetchone()[0]
+value = db.execute("SELECT value FROM keep_me").fetchone()[0]
+db.close()
+check('P01 valid legacy SQLite database migrates with integrity intact',
+      copied is True and integrity == 'ok' and value == 'school-record-123')
+check('P02 migration preserves source and never overwrites an existing target',
+      legacy.exists() and server.migrate_legacy_database() is False)
+corrupt = migration_tmp / 'corrupt.db'
+corrupt.write_bytes(b'not a sqlite database')
+target2 = migration_tmp / 'persistent2' / 'masar.db'
+server.LEGACY_DB_PATH = corrupt
+server.DB_PATH = target2
+try:
+    server.migrate_legacy_database()
+    corrupt_rejected = False
+except (sqlite3.DatabaseError, RuntimeError):
+    corrupt_rejected = True
+check('P03 corrupt legacy database is rejected without empty replacement',
+      corrupt_rejected and corrupt.exists() and not target2.exists())
 
 failed = [name for name, passed in RES if not passed]
 print(f'\\nTOTAL {len(RES)}  PASS {len(RES)-len(failed)}  FAIL {len(failed)}')
