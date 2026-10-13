@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 jobs:
-  build-windows-x64:
+  build-windows-32bit:
     name: Build Windows 7-compatible 32-bit installer
     runs-on: windows-2022
     timeout-minutes: 30
@@ -57,8 +57,17 @@ jobs:
         shell: pwsh
         run: |
           npm run build:dir -- --ia32 --publish never
-          if (!(Test-Path "release/win-unpacked/Masar.exe")) {
-            throw "Electron packaging did not produce release/win-unpacked/Masar.exe"
+          $exe = Get-ChildItem -Path "release" -Filter "Masar.exe" -Recurse | Select-Object -First 1
+          if (!$exe) {
+            throw "Electron packaging did not produce Masar.exe"
+          }
+          $stage = Join-Path (Get-Location) "release/win-unpacked"
+          if ($exe.Directory.FullName -ne $stage) {
+            New-Item -ItemType Directory -Path $stage -Force | Out-Null
+            Copy-Item -Path (Join-Path $exe.Directory.FullName "*") -Destination $stage -Recurse -Force
+          }
+          if (!(Test-Path (Join-Path $stage "Masar.exe"))) {
+            throw "Could not stage the 32-bit Electron application."
           }
 
       - name: Locate Inno Setup compiler
@@ -91,6 +100,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Masar-Setup-Windows7-32bit
-          path: desktop/release/Masar-Setup-Windows-x64.exe
+          path: desktop/release/Masar-Setup-Windows7-32bit.exe
           if-no-files-found: error
           retention-days: 30
