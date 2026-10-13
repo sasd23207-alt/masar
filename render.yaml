@@ -1,0 +1,21 @@
+# Render Blueprint for persistent SQLite storage.
+# IMPORTANT: A persistent disk requires a paid Render web service.
+# Do not sync this Blueprint until the owner approves the plan/cost.
+services:
+  - type: web
+    name: masar
+    runtime: python
+    plan: starter
+    buildCommand: echo "No build required"
+    startCommand: python server.py
+    disk:
+      name: masar-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: MASAR_DB
+        value: /var/data/masar.db
+      - key: MASAR_BACKUPS
+        value: /var/data/backups
+      - key: MASAR_ACCESS_CODE
+        sync: false
