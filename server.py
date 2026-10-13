@@ -721,8 +721,34 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 if a == 'health' and method == 'GET':
                     n = c.execute('SELECT COUNT(*) n FROM users').fetchone()['n']
-                    return self.out(200, {'ok': True, 'database': 'sqlite', 'signupEnabled': bool(ACCESS_CODE()), 'managerExists': n > 0, 'whatsappConfigured': wa_configured(), 'webhookConfigured': bool(WA_VERIFY() and WA_APP_SECRET())})
+                    return self.out(200, {'ok': True, 'database': 'sqlite', 'signupEnabled': bool(ACCESS_CODE()), 'managerExists': n > 0, 'whatsappConfigured': wa_configured(), 'webhookConfigured': bool(WA_VERIFY() and WA_APP_SECRET()), 'desktopMode': os.environ.get('MASAR_DESKTOP_MODE') == '1'})
                 if a == 'register' and method == 'POST':
+                    # Local desktop build: the installer already requires the school activation code.
+                    # Permit first-admin setup without asking for that code a second time, but only
+                    # from loopback and only while the database has no users.
+                    if os.environ.get('MASAR_DESKTOP_MODE') == '1':
+                        if self.client_address[0] not in ('127.0.0.1', '::1'):
+                            raise ApiError(403, 'DESKTOP_LOCAL_ONLY')
+                        throttle_check(self.client_address[0])
+                        with wlock:
+                            c.execute('BEGIN IMMEDIATE')
+                            if c.execute('SELECT COUNT(*) n FROM users').fetchone()['n'] != 0:
+                                c.execute('ROLLBACK')
+                                raise ApiError(409, 'ACCOUNT_EXISTS')
+                            try:
+                                username = str(body.get('username', '')).strip()
+                                password = str(body.get('password', ''))
+                                create_user(c, username, password, 'admin', str(body.get('fullName') or username)[:120])
+                                auth = login(c, username, password)
+                                if not auth:
+                                    raise ApiError(500, 'ACCOUNT_SETUP_FAILED')
+                                c.execute('COMMIT')
+                            except BaseException:
+                                if c.in_transaction:
+                                    c.execute('ROLLBACK')
+                                raise
+                        throttle_ok(self.client_address[0])
+                        return self.out(200, {'ok': True, 'token': auth[0], 'user': {'username': auth[1]['username'], 'role': auth[1]['role'], 'fullName': auth[1]['full_name']}})
                     # واجهة الإعداد المبسطة: اسم الحساب فقط، ومرة واحدة قبل وجود أي مستخدم.
                     # يبقى رمز التهيئة على الخادم ولا يُطلب من المستخدم إدخاله.
                     if not body.get('accessCode') and not body.get('password'):
