@@ -14,13 +14,13 @@ This folder builds an installable desktop version of Masar for one Windows compu
 
 ## Windows 7 compatibility
 
-The legacy build uses Python 3.8.10 with PyInstaller 5.13.2 and Electron 22.3.27, versions selected to target Windows 7. Target: Windows 7 SP1 or newer, x64. Windows 7 must have its required servicing updates installed, including KB2533623 (or the applicable update rollup).
+The legacy build uses 32-bit Python 3.8.10 with PyInstaller 5.13.2, 32-bit Node.js 16.20.2, and Electron 22.3.27 (ia32), versions selected to target Windows 7. Target: Windows 7 SP1 or newer, x86 (32-bit). Windows 7 must have its required servicing updates installed, including KB2533623 (or the applicable update rollup).
 
 **This is a legacy compatibility target, not a claim of security support.** Python 3.8 and Electron 22 are out of security support, and Windows 7 is out of support. Prefer Windows 10/11 for real school records. The package must be tested on an actual Windows 7 SP1 x64 computer before describing Windows 7 support as verified.
 
 ## Build
 
-The GitHub Actions workflow `.github/workflows/windows-installer.yml` builds the Windows backend and desktop shell, then creates `Masar-Setup-Windows-x64.exe` with Inno Setup. It uploads the installer as an Actions artifact. The source repository contains only build instructions and source files; it does not contain the school's private activation code or its database.
+The GitHub Actions workflow `.github/workflows/windows-installer.yml` builds the Windows backend and desktop shell, then creates `Masar-Setup-Windows7-32bit.exe` with Inno Setup. It uploads the installer as an Actions artifact. The source repository contains only build instructions and source files; it does not contain the school's private activation code or its database.
 
 A normal app update replaces application files only. A reinstall should not remove `%ProgramData%\Masar`. Nevertheless, local data can still be lost if the disk fails, the data folder is manually deleted, or the operating system is reinstalled. Make a backup to a separate USB/external drive regularly; backups stored on the same internal disk do not protect against disk failure.
 
