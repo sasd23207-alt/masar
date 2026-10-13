@@ -2919,22 +2919,69 @@ function applyRoleUI(){
   let b=document.getElementById('adminBtn'); if(isAdmin()&&!b){ const rb=document.getElementById('resetDataBtn'); b=document.createElement('div'); b.id='adminBtn'; b.className='icon-btn'; b.title='إدارة النظام (مستخدمون، نسخ احتياطي، إشعارات)'; b.innerHTML='⚙'; b.style.cursor='pointer'; b.onclick=openAdminPanel; rb.parentNode.insertBefore(b,rb); }
 }
 
-/* ---- الدخول / الإعداد الأول ---- */
-function showLogin(signupTab){
+/* ---- الدخول المبسّط: حساب محفوظ على الجهاز ---- */
+let MASAR_HEALTH = {managerExists:false};
+function showLogin(){
   let o=document.getElementById('loginOverlay'); if(o) o.remove();
   o=document.createElement('div'); o.id='loginOverlay';
-  o.innerHTML=`<div class="box"><h2>مِسار</h2>
-    <div style="display:flex;gap:6px;margin-bottom:14px"><button class="btn ${signupTab?'':'btn-brand'}" style="flex:1" id="tabLogin">تسجيل الدخول</button><button class="btn ${signupTab?'btn-brand':''}" style="flex:1" id="tabSignup">إنشاء حساب مدير</button></div>
-    ${signupTab?`<input id="suName" placeholder="الاسم الكامل"><input id="suUser" placeholder="اسم المستخدم" autocomplete="username"><input id="suPass" type="password" placeholder="كلمة المرور (8 أحرف على الأقل)" autocomplete="new-password"><input id="suCode" type="password" placeholder="رمز الإنشاء (من صاحب النظام)"><input id="suSchool" placeholder="اسم المدرسة (اختياري، لأول حساب فقط)">
-    <div class="err" id="loginErr"></div><button class="btn btn-brand" style="width:100%" id="suBtn">إنشاء الحساب والدخول</button>`
-    :`<input id="liUser" placeholder="اسم المستخدم" autocomplete="username"><input id="liPass" type="password" placeholder="كلمة المرور" autocomplete="current-password">
-    <div class="err" id="loginErr"></div><button class="btn btn-brand" style="width:100%" id="liBtn">دخول</button>`}</div>`;
+  const saved=(()=>{try{return localStorage.getItem('masar_username')||'';}catch(e){return '';}})();
+  const restore=()=>{
+    const box=document.querySelector('#loginOverlay .box');
+    box.innerHTML=`<h2 style="text-align:center">أهلًا بك في مِسار</h2>
+      <p style="text-align:center">الدخول إلى الحساب الموجود</p>
+      <input id="liUser" placeholder="اسم الحساب" autocomplete="username" value="${saved.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">
+      <input id="liPass" type="password" placeholder="كلمة المرور" autocomplete="current-password">
+      <div class="err" id="loginErr"></div>
+      <button class="btn btn-brand" style="width:100%" id="liBtn">دخول</button>
+      <button class="btn" style="width:100%;margin-top:8px" id="backSimpleBtn">رجوع</button>`;
+    const err=m=>{const el=document.getElementById('loginErr');if(el)el.textContent=m;};
+    const go=async()=>{try{
+      const d=await api('POST','/login',{username:document.getElementById('liUser').value.trim(),password:document.getElementById('liPass').value});
+      TOKEN=d.token; ME=d.user;
+      try{localStorage.setItem('masar_token',TOKEN);localStorage.setItem('masar_username',d.user.username||'');}catch(e){}
+      o.remove();await reloadState();startPolling();
+    }catch(e){err(errMsg(e));}};
+    document.getElementById('liBtn').onclick=go;
+    document.getElementById('liPass').addEventListener('keydown',e=>{if(e.key==='Enter')go();});
+    document.getElementById('backSimpleBtn').onclick=()=>showLogin();
+  };
+  o.innerHTML=`<div class="box">
+    <div style="width:54px;height:54px;border-radius:17px;background:var(--brand-tint);color:var(--brand);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:27px">م</div>
+    <h2 style="text-align:center;font-size:25px">مرحبًا بك في مِسار</h2>
+    <p style="text-align:center">نظام إدارة مدرسة الريادة</p>
+    ${MASAR_HEALTH.managerExists
+      ? (saved ? `<button class="btn btn-brand" style="width:100%;margin:8px 0" id="savedAccountBtn"></button>` : `<button class="btn btn-brand" style="width:100%;margin:8px 0" id="existingAccountBtn">الدخول إلى حساب موجود</button>`)
+      : `<input id="newAccountName" placeholder="اكتب اسم الحساب" autocomplete="username" maxlength="60">
+         <div class="err" id="loginErr"></div>
+         <button class="btn btn-brand" style="width:100%;margin-top:6px" id="createAccountBtn">إنشاء حسابي</button>`}
+    ${MASAR_HEALTH.managerExists ? '<button class="btn" style="width:100%;margin-top:8px" id="recoverAccountBtn">استعادة الدخول</button>' : ''}
+  </div>`;
   document.body.appendChild(o);
-  document.getElementById('tabLogin').onclick=()=>showLogin(false); document.getElementById('tabSignup').onclick=()=>showLogin(true);
-  const err=m=>document.getElementById('loginErr').textContent=m;
-  const doLogin=async(u,p)=>{ try{ const d=await api('POST','/login',{username:u,password:p}); TOKEN=d.token; try{localStorage.setItem('masar_token',TOKEN);localStorage.setItem('masar_username',d.user.username||u);}catch(e){} ME=d.user; o.remove(); await reloadState(); startPolling(); }catch(e){ err(errMsg(e)); } };
-  if(signupTab) document.getElementById('suBtn').onclick=async()=>{ const u=suUser.value.trim(),p=suPass.value; try{ await api('POST','/register',{username:u,password:p,fullName:suName.value.trim(),accessCode:suCode.value,schoolName:suSchool.value.trim()}); await doLogin(u,p); }catch(e){ err(errMsg(e)); } };
-  else { try{ const remembered=localStorage.getItem('masar_username')||''; if(remembered) document.getElementById('liUser').value=remembered; }catch(e){} document.getElementById('liBtn').onclick=()=>doLogin(liUser.value,liPass.value); liPass.addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(liUser.value,liPass.value); }); }
+  const recovery=document.getElementById('recoverAccountBtn');
+  if(recovery) recovery.onclick=restore;
+  const existing=document.getElementById('existingAccountBtn');
+  if(existing) existing.onclick=restore;
+  const savedBtn=document.getElementById('savedAccountBtn');
+  if(savedBtn){
+    savedBtn.textContent=saved;
+    savedBtn.onclick=restore;
+  }
+  const create=document.getElementById('createAccountBtn');
+  if(create) create.onclick=async()=>{
+    const u=document.getElementById('newAccountName').value.trim();
+    const err=document.getElementById('loginErr');
+    if(!u){err.textContent='اكتب اسم الحساب أولًا';return;}
+    create.disabled=true;create.textContent='جارٍ إنشاء الحساب…';
+    try{
+      const d=await api('POST','/register',{username:u,fullName:u});
+      TOKEN=d.token;ME=d.user;
+      try{localStorage.setItem('masar_token',TOKEN);localStorage.setItem('masar_username',d.user.username||u);}catch(e){}
+      o.remove();await reloadState();startPolling();
+    }catch(e){
+      if(e&&e.message==='ACCOUNT_EXISTS'){MASAR_HEALTH.managerExists=true;showLogin();return;}
+      err.textContent=errMsg(e);create.disabled=false;create.textContent='إنشاء حسابي';
+    }
+  };
 }
 async function logout(){ try{ await api('POST','/logout',{}); }catch(e){} TOKEN=''; ME=null; try{localStorage.removeItem('masar_token');}catch(e){} location.reload(); }
 let pollTimer=null;
@@ -2945,11 +2992,11 @@ function showRememberedAccount(user){
   o.innerHTML=`<div class="box"><h2>أهلًا بعودتك إلى مِسار</h2><p style="text-align:center;color:var(--ink-soft);margin:0 0 16px">حسابك محفوظ على هذا الجهاز</p><button class="btn btn-brand" style="width:100%" id="rememberedAccountBtn"></button><button class="btn" style="width:100%;margin-top:8px" id="otherAccountBtn">استخدام حساب آخر</button></div>`;
   document.body.appendChild(o);
   const b=document.getElementById('rememberedAccountBtn'); b.textContent=user.fullName||user.username; b.onclick=async()=>{ o.remove(); await reloadState(); if(ME) startPolling(); };
-  document.getElementById('otherAccountBtn').onclick=()=>showLogin(false);
+  document.getElementById('otherAccountBtn').onclick=()=>{showLogin();const b=document.getElementById('savedAccountBtn')||document.getElementById('existingAccountBtn');if(b)b.click();};
 }
 async function boot(){
-  try{ await fetch(MASAR_API+'/health').then(r=>{if(!r.ok)throw new Error('health');return r.json();}); }catch(e){ netBanner(true); showLogin(); return; }
-  if(TOKEN){ try{ const d=await api('GET','/me'); ME=d.user; try{localStorage.setItem('masar_username',d.user.username||'');}catch(e){} showRememberedAccount(d.user); return; }catch(e){} }
+  try{ MASAR_HEALTH=await fetch(MASAR_API+'/health').then(r=>{if(!r.ok)throw new Error('health');return r.json();}); }catch(e){ netBanner(true); showLogin(); return; }
+  if(TOKEN){ try{ const d=await api('GET','/me'); ME=d.user; try{localStorage.setItem('masar_username',d.user.username||'');}catch(e){} showRememberedAccount(d.user); return; }catch(e){ TOKEN=''; try{localStorage.removeItem('masar_token');}catch(x){} } }
   showLogin();
 }
 
