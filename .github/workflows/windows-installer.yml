@@ -9,6 +9,7 @@ on:
       - "masar.html"
       - "desktop/**"
       - ".github/workflows/windows-installer.yml"
+      - "tests/**"
   workflow_dispatch:
 
 permissions:
@@ -34,6 +35,10 @@ jobs:
         with:
           node-version: "16.20.2"
           architecture: "x86"
+
+      - name: Smoke-test desktop account and student persistence
+        shell: pwsh
+        run: python tests/desktop_persistence_smoke.py
 
       - name: Check Python syntax and build backend executable
         shell: pwsh
