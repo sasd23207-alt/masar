@@ -16,7 +16,7 @@ This folder builds an installable desktop version of Masar for one Windows compu
 
 The legacy build uses 32-bit Python 3.8.10 with PyInstaller 5.13.2, 32-bit Node.js 16.20.2, and Electron 22.3.27 (ia32), versions selected to target Windows 7. Target: Windows 7 SP1 or newer, x86 (32-bit). Windows 7 must have its required servicing updates installed, including KB2533623 (or the applicable update rollup).
 
-**This is a legacy compatibility target, not a claim of security support.** Python 3.8 and Electron 22 are out of security support, and Windows 7 is out of support. Prefer Windows 10/11 for real school records. The package must be tested on an actual Windows 7 SP1 x64 computer before describing Windows 7 support as verified.
+**This is a legacy compatibility target, not a claim of security support.** Python 3.8 and Electron 22 are out of security support, and Windows 7 is out of support. Prefer Windows 10/11 for real school records. The package must be tested on an actual Windows 7 SP1 32-bit computer before describing Windows 7 support as verified.
 
 ## Build
 
