@@ -20,6 +20,45 @@ load_env()
 
 DB_PATH = Path(os.environ.get('MASAR_DB', ROOT / 'data' / 'masar.db'))
 BACKUP_DIR = Path(os.environ.get('MASAR_BACKUPS', ROOT / 'backups'))
+LEGACY_DB_PATH = ROOT / 'data' / 'masar.db'
+
+def migrate_legacy_database():
+    """Copy a legacy SQLite database to the configured persistent path only when the target is absent.
+    The source is never deleted; a corrupt source aborts startup instead of silently starting empty.
+    """
+    if DB_PATH == LEGACY_DB_PATH or DB_PATH.exists() or not LEGACY_DB_PATH.is_file():
+        return False
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = DB_PATH.with_name(DB_PATH.name + ".migration.tmp")
+    if temp_path.exists():
+        temp_path.unlink()
+    src = sqlite3.connect(str(LEGACY_DB_PATH), timeout=30)
+    dst = None
+    try:
+        check = src.execute("PRAGMA integrity_check").fetchone()[0]
+        if check != "ok":
+            raise RuntimeError("Legacy Masar database failed integrity_check; refusing to initialize an empty replacement.")
+        dst = sqlite3.connect(str(temp_path), timeout=30)
+        src.backup(dst)
+        dst.close()
+        dst = None
+        verify = sqlite3.connect(str(temp_path), timeout=30)
+        try:
+            if verify.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                raise RuntimeError("Migrated Masar database failed integrity_check.")
+        finally:
+            verify.close()
+        os.replace(str(temp_path), str(DB_PATH))
+        print(f"MASAR database migrated from {LEGACY_DB_PATH} to {DB_PATH}", flush=True)
+        return True
+    except Exception:
+        if dst is not None:
+            dst.close()
+        if temp_path.exists():
+            temp_path.unlink()
+        raise
+    finally:
+        src.close()
 HOST = os.environ.get('MASAR_HOST', '0.0.0.0')
 PORT = int(os.environ.get('MASAR_PORT') or os.environ.get('PORT') or '8787')   # الاستضافات تمرر PORT
 WA_TOKEN = lambda: os.environ.get('WHATSAPP_ACCESS_TOKEN', '')
@@ -30,7 +69,7 @@ WA_MODE = lambda: os.environ.get('WHATSAPP_MODE', 'template')  # template | text
 COUNTRY_CODE = lambda: os.environ.get('MASAR_COUNTRY_CODE', '218').lstrip('+')
 WORKER_INTERVAL = lambda: float(os.environ.get('MASAR_WORKER_INTERVAL', '30'))
 OVERDUE_REMINDER_DAYS = lambda: int(os.environ.get('MASAR_OVERDUE_REMINDER_DAYS', '7'))
-SESSION_HOURS = 8760  # remember this device for one year
+SESSION_HOURS = 17520  # remember this device for two years
 DEFAULT_CLASSES = ['الأول أ','الثاني أ','الثالث أ','الرابع أ','الخامس أ','السادس أ','السابع أ','الثامن أ','التاسع أ','العاشر أ','الحادي عشر أ','الثاني عشر أ']
 
 wlock = threading.RLock()   # يسلسل الكتابات (مع WAL لا تعطل القراءة)
@@ -734,6 +773,21 @@ class Handler(BaseHTTPRequestHandler):
                 if a == 'logout': c.execute('DELETE FROM sessions WHERE token_hash=?', (hashlib.sha256(tok.encode()).hexdigest(),)); return self.out(200, {'ok': True})
                 if a == 'me': return self.out(200, {'ok': True, 'user': {'username': u['username'], 'role': u['role'], 'fullName': u['full_name']}})
                 if not perm_ok(u['role'], route_perm(method, parts), method): raise ApiError(403, 'FORBIDDEN')
+                if a == 'backup' and method == 'GET' and len(parts) > 2 and parts[2] == 'export':
+                    with wlock:
+                        filename = do_backup('download')
+                        backup_path = BACKUP_DIR / filename
+                        raw = backup_path.read_bytes()
+                        backup_path.unlink()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/vnd.sqlite3')
+                    self.send_header('Content-Disposition', f'attachment; filename="{filename}"')
+                    self.send_header('Content-Length', str(len(raw)))
+                    self.send_header('Cache-Control', 'no-store')
+                    self.send_header('X-Content-Type-Options', 'nosniff')
+                    self.end_headers()
+                    self.wfile.write(raw)
+                    return
                 res = self.dispatch(c, u, method, parts, body, q)
                 return self.out(200, {'ok': True, **(res or {})})
             finally: c.close()
@@ -830,6 +884,7 @@ def backup_loop():
         time.sleep(3600)
 
 def main():
+    migrate_legacy_database()
     migrate()
     threading.Thread(target=worker, daemon=True).start()
     threading.Thread(target=backup_loop, daemon=True).start()
