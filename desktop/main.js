@@ -110,6 +110,7 @@ function startBackend() {
 
   const accessCode = readAccessCode();
   const childEnv = { ...process.env };
+  childEnv.MASAR_DESKTOP_MODE = '1';
   childEnv.MASAR_HOST = HOST;
   childEnv.MASAR_PORT = String(PORT);
   childEnv.MASAR_DB = path.join(DB_DIR, 'masar.db');
