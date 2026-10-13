@@ -2932,16 +2932,24 @@ function showLogin(signupTab){
   document.body.appendChild(o);
   document.getElementById('tabLogin').onclick=()=>showLogin(false); document.getElementById('tabSignup').onclick=()=>showLogin(true);
   const err=m=>document.getElementById('loginErr').textContent=m;
-  const doLogin=async(u,p)=>{ try{ const d=await api('POST','/login',{username:u,password:p}); TOKEN=d.token; try{localStorage.setItem('masar_token',TOKEN);}catch(e){} ME=d.user; o.remove(); await reloadState(); startPolling(); }catch(e){ err(errMsg(e)); } };
+  const doLogin=async(u,p)=>{ try{ const d=await api('POST','/login',{username:u,password:p}); TOKEN=d.token; try{localStorage.setItem('masar_token',TOKEN);localStorage.setItem('masar_username',d.user.username||u);}catch(e){} ME=d.user; o.remove(); await reloadState(); startPolling(); }catch(e){ err(errMsg(e)); } };
   if(signupTab) document.getElementById('suBtn').onclick=async()=>{ const u=suUser.value.trim(),p=suPass.value; try{ await api('POST','/register',{username:u,password:p,fullName:suName.value.trim(),accessCode:suCode.value,schoolName:suSchool.value.trim()}); await doLogin(u,p); }catch(e){ err(errMsg(e)); } };
-  else { document.getElementById('liBtn').onclick=()=>doLogin(liUser.value,liPass.value); liPass.addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(liUser.value,liPass.value); }); }
+  else { try{ const remembered=localStorage.getItem('masar_username')||''; if(remembered) document.getElementById('liUser').value=remembered; }catch(e){} document.getElementById('liBtn').onclick=()=>doLogin(liUser.value,liPass.value); liPass.addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(liUser.value,liPass.value); }); }
 }
 async function logout(){ try{ await api('POST','/logout',{}); }catch(e){} TOKEN=''; ME=null; try{localStorage.removeItem('masar_token');}catch(e){} location.reload(); }
 let pollTimer=null;
 function startPolling(){ clearInterval(pollTimer); pollTimer=setInterval(()=>{ const ae=document.activeElement; const typing=ae&&/INPUT|SELECT|TEXTAREA/.test(ae.tagName); if(document.hidden||typing||document.getElementById('modalBackdrop').classList.contains('show')||document.getElementById('reportOverlay')?.style.display==='block'||document.getElementById('adminOverlay')?.style.display==='flex') return; reloadState(); },20000); }
+function showRememberedAccount(user){
+  let o=document.getElementById('loginOverlay'); if(o) o.remove();
+  o=document.createElement('div'); o.id='loginOverlay';
+  o.innerHTML=`<div class="box"><h2>أهلًا بعودتك إلى مِسار</h2><p style="text-align:center;color:var(--ink-soft);margin:0 0 16px">حسابك محفوظ على هذا الجهاز</p><button class="btn btn-brand" style="width:100%" id="rememberedAccountBtn"></button><button class="btn" style="width:100%;margin-top:8px" id="otherAccountBtn">استخدام حساب آخر</button></div>`;
+  document.body.appendChild(o);
+  const b=document.getElementById('rememberedAccountBtn'); b.textContent=user.fullName||user.username; b.onclick=async()=>{ o.remove(); await reloadState(); if(ME) startPolling(); };
+  document.getElementById('otherAccountBtn').onclick=()=>showLogin(false);
+}
 async function boot(){
-  try{ const h=await fetch(MASAR_API+'/health').then(r=>r.json()); if(false){} }catch(e){ netBanner(true); showLogin(); return; }
-  if(TOKEN){ try{ const d=await api('GET','/me'); ME=d.user; await reloadState(); startPolling(); return; }catch(e){} }
+  try{ await fetch(MASAR_API+'/health').then(r=>{if(!r.ok)throw new Error('health');return r.json();}); }catch(e){ netBanner(true); showLogin(); return; }
+  if(TOKEN){ try{ const d=await api('GET','/me'); ME=d.user; showRememberedAccount(d.user); return; }catch(e){} }
   showLogin();
 }
 
