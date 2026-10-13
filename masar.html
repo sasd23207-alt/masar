@@ -839,7 +839,7 @@
     <section class="page" id="page-students">
       <div class="page-head">
         <div><div class="eyebrow"><span data-ar="إدارة البيانات" data-en="Data Management">إدارة البيانات</span></div><h1><span data-ar="بيانات الطلاب" data-en="Students">بيانات الطلاب</span></h1><p><span data-ar="القائمة مرتبة أبجديًا — اضغط على أي طالب لعرض بياناته الكاملة" data-en="Alphabetically sorted — click any student to view full details">القائمة مرتبة أبجديًا — اضغط على أي طالب لعرض بياناته الكاملة</span></p></div>
-        <div class="head-actions"><button class="btn" onclick="window.print()"><svg class="icon"><use href="#i-print"/></svg> <span data-ar="طباعة" data-en="Print">طباعة</span></button><button class="btn btn-brand" onclick="openAddModal('student')"><svg class="icon"><use href="#i-plus"/></svg> <span data-ar="إضافة طالب" data-en="Add Student">إضافة طالب</span></button></div>
+        <div class="head-actions"><button class="btn" onclick="window.print()"><svg class="icon"><use href="#i-print"/></svg> <span data-ar="طباعة" data-en="Print">طباعة</span></button><button class="btn" onclick="addClassUI()"><svg class="icon"><use href="#i-plus"/></svg> إضافة فصل</button><button class="btn btn-brand" onclick="openAddModal('student')"><svg class="icon"><use href="#i-plus"/></svg> <span data-ar="إضافة طالب" data-en="Add Student">إضافة طالب</span></button></div>
       </div>
       <div class="list-shell">
         <div class="list-col"><div class="list-toolbar"><input id="studentFilter" placeholder="تصفية الأسماء…"></div><div class="alpha-groups" id="studentList"></div></div>
@@ -1187,7 +1187,7 @@ const salaries = [];  // مشتقة من teachers عند كل reload
 
 
 
-const classNames = ['السادس أ','السابع أ','الثامن أ','التاسع أ','العاشر أ','الحادي عشر أ','الثاني عشر أ'];
+const classNames = ['الأول أ','الثاني أ','الثالث أ','الرابع أ','الخامس أ','السادس أ','السابع أ','الثامن أ','التاسع أ','العاشر أ','الحادي عشر أ','الثاني عشر أ'];
 /* ملاحظة: gradeCounts و attendanceTrend صارت تُحسب فعليًا من البيانات الحقيقية
    (شوف computeGradeCounts و computeAttendanceTrend تحت) — لا أرقام ثابتة بعد الآن. */
 
@@ -2113,6 +2113,17 @@ function toggleLang(){
 document.getElementById('langBtn').addEventListener('click', toggleLang);
 
 /* ---------------- School settings ---------------- */
+async function addClassUI(){
+  const raw = prompt('اكتب اسم الفصل الجديد:');
+  if(raw === null) return;
+  const name = raw.trim().replace(/\\s+/g, ' ');
+  if(!name){ toast('يرجى كتابة اسم الفصل'); return; }
+  if(name.length > 80){ toast('اسم الفصل طويل جدًا (الحد 80 حرفًا)'); return; }
+  const result = await apiWrite('POST','/classes',{name});
+  if(!result) return;
+  if(!result.created){ toast('هذا الفصل موجود بالفعل'); return; }
+  toast('تمت إضافة الفصل وحفظه في قاعدة البيانات ✓');
+}
 function renameSchool(){
   const cur = document.getElementById('schoolNameLabel').textContent.trim();
   const next = prompt('اسم المدرسة الجديد:', cur);
@@ -2169,10 +2180,7 @@ function openAddModal(type){
         <div><label>العمر</label><input id="mStuAge" type="number" min="5" max="20" placeholder="15"></div>
         <div><label>هاتف الطالب</label><input id="mStuPhone" placeholder="091xxxxxxx"></div><div><label>هاتف ولي الأمر (واتساب)</label><input id="mStuGuardianPhone" placeholder="091xxxxxxx"></div><div><label>اسم ولي الأمر</label><input id="mStuGuardianName"></div>
       </div>
-      <div class="modal-row2">
-        <div><label>الصف</label><select id="mStuGrade">${[...new Set(classNames.map(c=>c.split(' ').slice(0,-1).join(' ')||c))].map(g=>`<option>${g}</option>`).join('')}</select></div>
-        <div><label>الشعبة</label><select id="mStuSection"><option>أ</option><option>ب</option><option>ج</option></select></div>
-      </div>`;
+      <div><label>الفصل</label><select id="mStuClass"></select><div style="margin-top:7px;font-size:12px;color:var(--ink-soft)">لإضافة فصل باسم جديد، استخدم زر «إضافة فصل» في صفحة الطلاب.</div></div>`;
   } else {
     body.innerHTML = `
       <div><label>الاسم</label><input id="mTchName" placeholder="مثال: أ. منى العتيبي"></div>
@@ -2181,6 +2189,10 @@ function openAddModal(type){
         <div><label>رقم الهاتف</label><input id="mTchPhone" placeholder="05xxxxxxxx"></div>
       </div>
       <div><label>الصفوف التي يدرّسها</label><input id="mTchClasses" placeholder="مثال: التاسع أ، العاشر ب"></div>`;
+  }
+  if(type==='student'){
+    const classSelect = document.getElementById('mStuClass');
+    classNames.forEach(name => classSelect.add(new Option(name, name)));
   }
   modalBackdrop.classList.add('show');
 }
@@ -2192,12 +2204,11 @@ async function submitAddModal(){
     const age = document.getElementById('mStuAge').value || 15;
     const phone = document.getElementById('mStuPhone').value.trim() || '—';
     const guardianPhone = document.getElementById('mStuGuardianPhone').value.trim();
-    const grade = document.getElementById('mStuGrade').value;
-    const section = document.getElementById('mStuSection').value;
+    const className = document.getElementById('mStuClass').value;
     if(!name){ toast('يرجى إدخال اسم الطالب'); return; }
     const gname = document.getElementById('mStuGuardianName')?.value.trim()||'';
     if(!guardianPhone){ if(!confirm('لم تُدخل رقم ولي الأمر — لن تصل أي إشعارات واتساب لهذا الطالب. المتابعة؟')) return; }
-    const r = await apiWrite('POST','/students',{name, age:+age, className: grade+' '+section, phone: phone==='—'?'':phone, guardianPhone, guardianName:gname});
+    const r = await apiWrite('POST','/students',{name, age:+age, className, phone: phone==='—'?'':phone, guardianPhone, guardianName:gname});
     if(!r) return;
     document.getElementById('studentFilter').value='';
     toast('تمت إضافة الطالب وحفظه في قاعدة البيانات ✓');
@@ -2874,7 +2885,7 @@ function applyServerState(x){
   rebuildAttendanceState();
   return cn;
 }
-const DEFAULT_CLASSES_UI = ['السادس أ','السابع أ','الثامن أ','التاسع أ','العاشر أ','الحادي عشر أ','الثاني عشر أ'];
+const DEFAULT_CLASSES_UI = ['الأول أ','الثاني أ','الثالث أ','الرابع أ','الخامس أ','السادس أ','السابع أ','الثامن أ','التاسع أ','العاشر أ','الحادي عشر أ','الثاني عشر أ'];
 function activeChip(id){ const el=document.getElementById(id); const i=[...(el?el.querySelectorAll('.chip'):[])].findIndex(c=>c.classList.contains('active')); return i<0?0:i; }
 function renderAll(classesChanged){
   const sf=document.getElementById('studentFilter').value, tf=document.getElementById('teacherFilter').value;
