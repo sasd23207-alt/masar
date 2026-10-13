@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, session } = require('electron');
 const { spawn } = require('child_process');
 const fs = require('fs');
 const http = require('http');
@@ -141,6 +141,22 @@ function startBackend() {
 }
 
 async function startApplication() {
+  // Keep this desktop build fully local: only the bundled loopback API is allowed.
+  // External requests (including optional web fonts) are blocked so core use needs no internet.
+  session.defaultSession.webRequest.onBeforeRequest(
+    { urls: ['http://*/*', 'https://*/*'] },
+    (details, callback) => {
+      try {
+        const url = new URL(details.url);
+        const isLocalMasar = url.protocol === 'http:' &&
+          url.hostname === HOST && url.port === String(PORT);
+        callback({ cancel: !isLocalMasar });
+      } catch (_) {
+        callback({ cancel: true });
+      }
+    }
+  );
+
   ensureFolders();
   startBackend();
   await waitForBackend(30000);
