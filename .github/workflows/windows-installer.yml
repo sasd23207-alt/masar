@@ -53,11 +53,19 @@ jobs:
           # The Windows 2022 build host has the Universal CRT installed system-wide,
           # but clean Windows 7 machines may not. Bundle Microsoft's redistributable
           # UCRT DLLs locally beside python38.dll rather than relying on build-host OS files.
-          $ucrtRoots = @(
-            "${env:ProgramFiles(x86)}\Windows Kits\10\Redist\ucrt\DLLs\x86",
-            "${env:ProgramFiles}\Windows Kits\10\Redist\ucrt\DLLs\x86"
-          )
-          $ucrtRoot = $ucrtRoots | Where-Object { Test-Path (Join-Path $_ "ucrtbase.dll") } | Select-Object -First 1
+          $sdkRedistRoots = @(
+            (Join-Path "${env:ProgramFiles(x86)}" "Windows Kits\10\Redist"),
+            (Join-Path "${env:ProgramFiles}" "Windows Kits\10\Redist")
+          ) | Where-Object { Test-Path $_ }
+          $ucrtRoot = $null
+          foreach ($sdkRedist in $sdkRedistRoots) {
+            $candidate = Get-ChildItem -Path $sdkRedist -Directory -ErrorAction SilentlyContinue |
+              Sort-Object Name -Descending |
+              ForEach-Object { Join-Path $_.FullName "ucrt\DLLs\x86" } |
+              Where-Object { Test-Path (Join-Path $_ "ucrtbase.dll") } |
+              Select-Object -First 1
+            if ($candidate) { $ucrtRoot = $candidate; break }
+          }
           if (!$ucrtRoot) {
             throw "Windows SDK Universal CRT redistributable DLLs (x86) were not found on the build runner."
           }
