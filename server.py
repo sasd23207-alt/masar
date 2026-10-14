@@ -8,6 +8,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
+def startup_trace(message):
+    """Flush startup diagnostics to the desktop log before any slow initialization."""
+    if os.environ.get('MASAR_DESKTOP_MODE') == '1':
+        print('[MASAR_STARTUP {}] {}'.format(datetime.now().isoformat(timespec='seconds'), message), flush=True)
+
 def load_env():
     f = ROOT / '.env'
     if f.exists():
@@ -127,23 +132,37 @@ CREATE INDEX idx_inbound_phone ON inbound_messages(from_phone);
 """,),
 ]
 
-def conn():
+def conn(startup=False):
+    if startup: startup_trace('SQLite: preparing database folder {}'.format(DB_PATH.parent))
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if startup: startup_trace('SQLite: opening database {}'.format(DB_PATH))
     c = sqlite3.connect(DB_PATH, timeout=30, isolation_level=None)
     c.row_factory = sqlite3.Row
-    c.execute('PRAGMA foreign_keys=ON'); c.execute('PRAGMA journal_mode=WAL'); c.execute('PRAGMA synchronous=FULL')
+    if startup: startup_trace('SQLite: setting foreign_keys')
+    c.execute('PRAGMA foreign_keys=ON')
+    if startup: startup_trace('SQLite: setting journal_mode=WAL (this may wait if another process holds a database lock)')
+    c.execute('PRAGMA journal_mode=WAL')
+    if startup: startup_trace('SQLite: setting synchronous=FULL')
+    c.execute('PRAGMA synchronous=FULL')
+    if startup: startup_trace('SQLite: connection setup complete')
     return c
 
 def migrate():
-    c = conn()
+    startup_trace('Database setup: opening SQLite connection')
+    c = conn(startup=True)
+    startup_trace('Database setup: ensuring schema_migrations table')
     c.execute('CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, at TEXT NOT NULL)')
     cur = (c.execute('SELECT MAX(version) m FROM schema_migrations').fetchone()['m'] or 0)
+    startup_trace('Database setup: current schema version {}'.format(cur))
     for i, (sql,) in enumerate(MIGRATIONS, 1):
         if i > cur:
+            startup_trace('Database setup: applying schema migration {}'.format(i))
             c.executescript('BEGIN;' + sql + f"INSERT INTO schema_migrations VALUES({i},'{now()}');COMMIT;")
-    # الصفوف (بنية وليست بيانات تجريبية)
+            startup_trace('Database setup: migration {} complete'.format(i))
+    startup_trace('Database setup: checking default class records')
     for n in DEFAULT_CLASSES: ensure_class(c, n)
     c.close()
+    startup_trace('Database setup: complete')
 
 def split_class(name):
     parts = name.strip().split(' ')
@@ -910,14 +929,27 @@ def backup_loop():
         time.sleep(3600)
 
 def main():
-    migrate_legacy_database()
-    migrate()
-    threading.Thread(target=worker, daemon=True).start()
-    threading.Thread(target=backup_loop, daemon=True).start()
-    print(f'MASAR http://{HOST}:{PORT}  db={DB_PATH}  whatsapp={"configured" if wa_configured() else "NOT configured"}', flush=True)
-    class Srv(ThreadingHTTPServer):
-        request_queue_size = 256      # الافتراضي 5 يسبب Connection reset عند ضغط متزامن
-        daemon_threads = True
-    Srv((HOST, PORT), Handler).serve_forever()
+    try:
+        startup_trace('Process started; database path={}'.format(DB_PATH))
+        startup_trace('Database setup: checking for legacy database migration')
+        migrate_legacy_database()
+        startup_trace('Database setup: legacy migration check complete')
+        migrate()
+        startup_trace('Database setup: initialization complete')
+        threading.Thread(target=worker, daemon=True).start()
+        startup_trace('Background worker started')
+        threading.Thread(target=backup_loop, daemon=True).start()
+        startup_trace('Backup worker started')
+        print(f'MASAR http://{HOST}:{PORT}  db={DB_PATH}  whatsapp={"configured" if wa_configured() else "NOT configured"}', flush=True)
+        startup_trace('HTTP server: binding to {}:{}'.format(HOST, PORT))
+        class Srv(ThreadingHTTPServer):
+            request_queue_size = 256      # الافتراضي 5 يسبب Connection reset عند ضغط متزامن
+            daemon_threads = True
+        Srv((HOST, PORT), Handler).serve_forever()
+    except Exception as exc:
+        startup_trace('FATAL startup/runtime exception: {}: {}'.format(type(exc).__name__, exc))
+        import traceback
+        traceback.print_exc()
+        raise
 
 if __name__ == '__main__': main()
