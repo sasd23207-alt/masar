@@ -81,6 +81,31 @@ jobs:
             throw "Could not stage the 32-bit Electron application."
           }
 
+      - name: Download official Windows 7 compatibility updates
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "desktop/prerequisites" -Force | Out-Null
+          $packages = @(
+            @{
+              Url = "https://download.microsoft.com/download/c/9/6/c96cd606-3e05-4e1c-b201-51211ae80b1e/Windows6.1-KB3063858-x86.msu"
+              Path = "desktop/prerequisites/Windows6.1-KB3063858-x86.msu"
+              MinimumBytes = 700000
+            },
+            @{
+              Url = "https://download.microsoft.com/download/0/8/e/08e0386b-f6af-4651-8d1b-c0a95d2731f0/Windows6.1-KB3063858-x64.msu"
+              Path = "desktop/prerequisites/Windows6.1-KB3063858-x64.msu"
+              MinimumBytes = 1400000
+            }
+          )
+          foreach ($package in $packages) {
+            Invoke-WebRequest -Uri $package.Url -OutFile $package.Path -UseBasicParsing
+            $file = Get-Item $package.Path
+            if ($file.Length -lt $package.MinimumBytes) {
+              throw "Microsoft compatibility update download is incomplete: $($package.Path) ($($file.Length) bytes)"
+            }
+            Write-Host "Downloaded $($file.Name): $($file.Length) bytes"
+          }
+
       - name: Locate Inno Setup compiler
         id: inno
         shell: pwsh
