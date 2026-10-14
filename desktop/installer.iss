@@ -27,17 +27,41 @@ Name: "{commonappdata}\Masar\logs"; Permissions: users-modify; Flags: uninsnever
 
 [Files]
 Source: "release\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Python 3.8 uses Windows' AddDllDirectory API. On Windows 7, KB2533623 (or a
+; superseding update such as KB3063858) is required. Embed the official MSU so
+; the installer can install the prerequisite without a separate user download.
+Source: "prerequisites\Windows6.1-KB3063858-x86.msu"; DestDir: "{tmp}"; Flags: dontcopy
+Source: "prerequisites\Windows6.1-KB3063858-x64.msu"; DestDir: "{tmp}"; Flags: dontcopy
 
 [Icons]
 Name: "{autoprograms}\مِسار"; Filename: "{app}\Masar.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\مِسار"; Filename: "{app}\Masar.exe"; WorkingDir: "{app}"
 
 [Run]
-Filename: "{app}\Masar.exe"; Description: "تشغيل مِسار الآن"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Masar.exe"; Description: "تشغيل مِسار الآن"; Flags: nowait postinstall skipifsilent; Check: CanLaunchMasar
 
 [Code]
 var
   AccessCodePage: TInputQueryWizardPage;
+  PrerequisiteRestartRequired: Boolean;
+
+function IsWindows7: Boolean;
+var
+  Version: TWindowsVersion;
+begin
+  GetWindowsVersionEx(Version);
+  Result := (Version.Major = 6) and (Version.Minor = 1);
+end;
+
+function CanLaunchMasar: Boolean;
+begin
+  Result := not PrerequisiteRestartRequired;
+end;
+
+function NeedRestart: Boolean;
+begin
+  Result := PrerequisiteRestartRequired;
+end;
 
 procedure InitializeWizard;
 var
@@ -64,6 +88,59 @@ begin
   begin
     MsgBox('أدخل رمز التفعيل للمتابعة.', mbError, MB_OK);
     Result := False;
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  UpdatePath: string;
+  ResultCode: Integer;
+  UpdateFileName: string;
+begin
+  Result := '';
+  NeedsRestart := False;
+
+  if not IsWindows7 then
+    Exit;
+
+  if IsWin64 then
+    UpdateFileName := 'Windows6.1-KB3063858-x64.msu'
+  else
+    UpdateFileName := 'Windows6.1-KB3063858-x86.msu';
+
+  try
+    ExtractTemporaryFile(UpdateFileName);
+  except
+    Result := 'تعذر استخراج تحديث توافق Windows 7. أوقف التثبيت وأعد تنزيل ملف مِسار.';
+    Exit;
+  end;
+
+  UpdatePath := ExpandConstant('{tmp}\' + UpdateFileName);
+  if not Exec(ExpandConstant('{sys}\wusa.exe'),
+      '"' + UpdatePath + '" /quiet /norestart', '', SW_HIDE,
+      ewWaitUntilTerminated, ResultCode) then
+  begin
+    Result := 'تعذر تشغيل مثبت تحديث توافق Windows 7. تأكد من تشغيل المثبّت بصفة المسؤول.';
+    Exit;
+  end;
+
+  if ResultCode = 3010 then
+  begin
+    PrerequisiteRestartRequired := True;
+    MsgBox(
+      'تم تثبيت تحديث توافق Windows 7 المطلوب لتشغيل مِسار. احفظ أعمالك وأعد تشغيل الكمبيوتر عند انتهاء التثبيت. لا تفتح مِسار قبل إعادة التشغيل.',
+      mbInformation, MB_OK);
+  end
+  else if (ResultCode = 0) or (ResultCode = 2359302) or
+          (ResultCode = $80240017) then
+  begin
+    { Installed, already installed, or superseded/not applicable on this patched OS. }
+  end
+  else
+  begin
+    Result := 'تعذر تثبيت تحديث توافق Windows 7 (رمز ' +
+      IntToStr(ResultCode) + '). تأكد من أن النظام Windows 7 SP1 ومحدّث، ثم أعد المحاولة.';
+    Exit;
   end;
 end;
 
