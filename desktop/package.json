@@ -1,0 +1,42 @@
+{
+  "name": "masar-desktop",
+  "version": "1.0.0",
+  "description": "Local Windows desktop shell for the Masar school management system",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "check": "node --check main.js",
+    "build:dir": "electron-builder --win dir --ia32"
+  },
+  "devDependencies": {
+    "electron": "22.3.27",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "ly.masar.school.desktop",
+    "productName": "Masar",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/backend",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "dir"
+      ],
+      "artifactName": "Masar-${version}-ia32.${ext}"
+    }
+  }
+}

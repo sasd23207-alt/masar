@@ -1,0 +1,172 @@
+name: Build Windows Desktop Installer
+
+on:
+  push:
+    branches:
+      - feature/windows-desktop-installer
+    paths:
+      - "server.py"
+      - "masar.html"
+      - "desktop/**"
+      - ".github/workflows/windows-installer.yml"
+      - "tests/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-32bit:
+    name: Build Windows 7-compatible 32-bit installer
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up legacy-compatible Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8.10"
+          architecture: "x86"
+
+      - name: Set up Node.js for the desktop shell
+        uses: actions/setup-node@v4
+        with:
+          node-version: "16.20.2"
+          architecture: "x86"
+
+      - name: Smoke-test desktop account and student persistence
+        shell: pwsh
+        run: python tests/desktop_persistence_smoke.py
+
+      - name: Check Python syntax and build backend executable
+        shell: pwsh
+        run: |
+          python -m py_compile server.py
+          python -m pip install "pip<25" pyinstaller==5.13.2
+          python -m PyInstaller --noconfirm --clean --onedir --name MasarServer --distpath "desktop/resources/backend" --workpath "desktop/build/pyinstaller" --specpath "desktop/build" --add-data "$((Resolve-Path 'masar.html').Path);." server.py
+          if (!(Test-Path "desktop/resources/backend/MasarServer/MasarServer.exe")) {
+            throw "PyInstaller did not produce MasarServer.exe"
+          }
+
+          # The Windows 2022 build host has the Universal CRT installed system-wide,
+          # but clean Windows 7 machines may not. Bundle Microsoft's redistributable
+          # UCRT DLLs locally beside python38.dll rather than relying on build-host OS files.
+          $sdkRedistRoots = @(
+            (Join-Path "${env:ProgramFiles(x86)}" "Windows Kits\10\Redist"),
+            (Join-Path "${env:ProgramFiles}" "Windows Kits\10\Redist")
+          ) | Where-Object { Test-Path $_ }
+          $ucrtRoot = $null
+          foreach ($sdkRedist in $sdkRedistRoots) {
+            $candidate = Get-ChildItem -Path $sdkRedist -Directory -ErrorAction SilentlyContinue |
+              Sort-Object Name -Descending |
+              ForEach-Object { Join-Path $_.FullName "ucrt\DLLs\x86" } |
+              Where-Object { Test-Path (Join-Path $_ "ucrtbase.dll") } |
+              Select-Object -First 1
+            if ($candidate) { $ucrtRoot = $candidate; break }
+          }
+          if (!$ucrtRoot) {
+            throw "Windows SDK Universal CRT redistributable DLLs (x86) were not found on the build runner."
+          }
+          $ucrtTarget = "desktop/resources/backend/MasarServer"
+          $ucrtDlls = Get-ChildItem -Path $ucrtRoot -File | Where-Object {
+            $_.Name -eq "ucrtbase.dll" -or $_.Name -like "api-ms-win-crt-*.dll"
+          }
+          if (!($ucrtDlls.Name -contains "ucrtbase.dll")) {
+            throw "The Windows SDK UCRT set is incomplete."
+          }
+          foreach ($dll in $ucrtDlls) {
+            Copy-Item -Path $dll.FullName -Destination $ucrtTarget -Force
+          }
+          Write-Host "Bundled $($ucrtDlls.Count) official Windows SDK UCRT DLLs for x86."
+
+      - name: Smoke-test packaged backend persistence across restart
+        shell: pwsh
+        run: |
+          $env:MASAR_SMOKE_BACKEND_EXE = (Resolve-Path "desktop/resources/backend/MasarServer/MasarServer.exe").Path
+          python tests/desktop_persistence_smoke.py
+
+      - name: Install desktop build dependencies
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          npm install --no-audit --no-fund
+          npm run check
+
+      - name: Build the standalone desktop app directory
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          npm run build:dir -- --ia32 --publish never
+          $exe = Get-ChildItem -Path "release" -Filter "Masar.exe" -Recurse | Select-Object -First 1
+          if (!$exe) {
+            throw "Electron packaging did not produce Masar.exe"
+          }
+          $stage = Join-Path (Get-Location) "release/win-unpacked"
+          if ($exe.Directory.FullName -ne $stage) {
+            New-Item -ItemType Directory -Path $stage -Force | Out-Null
+            Copy-Item -Path (Join-Path $exe.Directory.FullName "*") -Destination $stage -Recurse -Force
+          }
+          if (!(Test-Path (Join-Path $stage "Masar.exe"))) {
+            throw "Could not stage the 32-bit Electron application."
+          }
+
+      - name: Download official Windows 7 compatibility updates
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "desktop/prerequisites" -Force | Out-Null
+          $packages = @(
+            @{
+              Url = "https://download.microsoft.com/download/c/9/6/c96cd606-3e05-4e1c-b201-51211ae80b1e/Windows6.1-KB3063858-x86.msu"
+              Path = "desktop/prerequisites/Windows6.1-KB3063858-x86.msu"
+              MinimumBytes = 700000
+            },
+            @{
+              Url = "https://download.microsoft.com/download/0/8/e/08e0386b-f6af-4651-8d1b-c0a95d2731f0/Windows6.1-KB3063858-x64.msu"
+              Path = "desktop/prerequisites/Windows6.1-KB3063858-x64.msu"
+              MinimumBytes = 1400000
+            }
+          )
+          foreach ($package in $packages) {
+            Invoke-WebRequest -Uri $package.Url -OutFile $package.Path -UseBasicParsing
+            $file = Get-Item $package.Path
+            if ($file.Length -lt $package.MinimumBytes) {
+              throw "Microsoft compatibility update download is incomplete: $($package.Path) ($($file.Length) bytes)"
+            }
+            Write-Host "Downloaded $($file.Name): $($file.Length) bytes"
+          }
+
+      - name: Locate Inno Setup compiler
+        id: inno
+        shell: pwsh
+        run: |
+          $paths = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 7\ISCC.exe"
+          )
+          $iscc = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (!$iscc) {
+            choco install innosetup --yes --no-progress
+            $iscc = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (!$iscc) { throw "Inno Setup compiler (ISCC.exe) was not found." }
+          "iscc=$iscc" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Create the installer
+        shell: pwsh
+        run: |
+          & "${{ steps.inno.outputs.iscc }}" "desktop/installer.iss"
+          if (!(Test-Path "desktop/release/Masar-Setup-Windows7-32bit.exe")) {
+            throw "Inno Setup did not produce the expected installer."
+          }
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Masar-Setup-Windows7-32bit
+          path: desktop/release/Masar-Setup-Windows7-32bit.exe
+          if-no-files-found: error
+          retention-days: 30
