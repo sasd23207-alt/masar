@@ -50,6 +50,29 @@ jobs:
             throw "PyInstaller did not produce MasarServer.exe"
           }
 
+          # The Windows 2022 build host has the Universal CRT installed system-wide,
+          # but clean Windows 7 machines may not. Bundle Microsoft's redistributable
+          # UCRT DLLs locally beside python38.dll rather than relying on build-host OS files.
+          $ucrtRoots = @(
+            "${env:ProgramFiles(x86)}\Windows Kits\10\Redist\ucrt\DLLs\x86",
+            "${env:ProgramFiles}\Windows Kits\10\Redist\ucrt\DLLs\x86"
+          )
+          $ucrtRoot = $ucrtRoots | Where-Object { Test-Path (Join-Path $_ "ucrtbase.dll") } | Select-Object -First 1
+          if (!$ucrtRoot) {
+            throw "Windows SDK Universal CRT redistributable DLLs (x86) were not found on the build runner."
+          }
+          $ucrtTarget = "desktop/resources/backend/MasarServer"
+          $ucrtDlls = Get-ChildItem -Path $ucrtRoot -File | Where-Object {
+            $_.Name -eq "ucrtbase.dll" -or $_.Name -like "api-ms-win-crt-*.dll"
+          }
+          if (!($ucrtDlls.Name -contains "ucrtbase.dll")) {
+            throw "The Windows SDK UCRT set is incomplete."
+          }
+          foreach ($dll in $ucrtDlls) {
+            Copy-Item -Path $dll.FullName -Destination $ucrtTarget -Force
+          }
+          Write-Host "Bundled $($ucrtDlls.Count) official Windows SDK UCRT DLLs for x86."
+
       - name: Smoke-test packaged backend persistence across restart
         shell: pwsh
         run: |
