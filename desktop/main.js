@@ -160,7 +160,9 @@ async function startApplication() {
 
   ensureFolders();
   startBackend();
-  await waitForBackend(30000);
+  // SQLite schema setup has a 30-second lock wait of its own; give startup enough
+  // time to report its real error into server.log instead of killing it at the same deadline.
+  await waitForBackend(90000);
 
   mainWindow = new BrowserWindow({
     width: 1360,
